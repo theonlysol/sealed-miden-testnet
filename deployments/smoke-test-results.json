@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-04-29T12:18:58.761Z",
+  "status": "success",
+  "duration": 4.531,
+  "result": {
+    "valid": true,
+    "message": "Proof verified successfully.",
+    "rpcUrl": "https://rpc.testnet.miden.io"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "network": "testnet",
+  "rpc": "https://rpc.testnet.miden.io",
+  "account_id": "0x4a2c89f1d3e5b7a0",
+  "component_hash": "8c57faf72c1ef6c3e82f73e1569b08900f99eccc0ba25c1126414aeac4cecf75",
+  "deployed_at": "2026-04-29T12:20:00Z",
+  "explorer_url": "https://explorer.miden.io/account/0x4a2c89f1d3e5b7a0"
+}

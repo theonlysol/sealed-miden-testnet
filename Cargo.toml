@@ -1,0 +1,3 @@
+[workspace]
+members = ["contracts/sealed-account", "sdk/sealed-sdk", "tests", "scripts/deployer"]
+resolver = "2"

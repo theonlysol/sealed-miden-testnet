@@ -1,0 +1,115 @@
+# Checks that run once per day.
+#
+# These are generally expensive jobs that don't provide enough utility to run on _every_ PR.
+name: nightly
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *" # Everyday at 06:00am UTC
+
+permissions:
+  contents: read
+
+jobs:
+  # Run tests on the beta channel to provide feedback for Rust team.
+  beta-test:
+    name: Test on beta channel
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: "next"
+          persist-credentials: false
+      - name: Cleanup large tools for build space
+        uses: ./.github/actions/cleanup-runner
+      - name: Rustup
+        run: rustup install beta && rustup default beta
+      # Keep this on a released install-action commit with an explicit tool; shortcut tags can
+      # trip zizmor's impostor-commit audit when they are later retagged.
+      - uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2.75.18
+        with:
+          tool: nextest@0.9.122
+      - name: Run tests
+        run: make test
+
+  # Check that our MSRV complies with our specified rust version.
+  # Each workspace package is verified independently via a matrix for clear per-package errors.
+  workspace-packages:
+    name: List packages
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.package-matrix.outputs.packages }}
+    # Deliberately use stable rust instead of the toolchain.toml version.
+    # This prevents installing the toolchain version which isn't crucial for this operation.
+    env:
+      RUSTUP_TOOLCHAIN: stable
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: "next"
+          persist-credentials: false
+      - name: Extract workspace packages
+        id: package-matrix
+        run: |
+          PACKAGES=$(cargo metadata --format-version 1 --no-deps \
+            | jq -c '
+              .workspace_members as $members
+              | .packages
+              | map(select(.id as $id | $members | index($id)))
+              | map(.name)
+            ')
+
+          echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
+
+  msrv:
+    needs: workspace-packages
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: ${{ fromJson(needs.workspace-packages.outputs.packages) }}
+    # Deliberately use stable rust instead of the toolchain.toml version.
+    # This prevents issues where e.g. `cargo-msrv` requires a newer version of rust than the toolchain.toml version.
+    env:
+      RUSTUP_TOOLCHAIN: stable
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: "next"
+          persist-credentials: false
+      - name: Cleanup large tools for build space
+        uses: ./.github/actions/cleanup-runner
+      # Keep this on a released install-action commit with an explicit tool; shortcut tags can
+      # trip zizmor's impostor-commit audit when they are later retagged.
+      - name: Install cargo-binstall
+        uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2.75.18
+        with:
+          tool: cargo-binstall
+      - name: Install cargo-msrv
+        run: cargo binstall --no-confirm cargo-msrv
+      - name: Get manifest path for package
+        id: pkg
+        env:
+          PACKAGE_NAME: ${{ matrix.package }}
+        run: |
+          MANIFEST_PATH=$(cargo metadata --format-version 1 --no-deps \
+            | jq -r --arg package "$PACKAGE_NAME" '
+              .packages[]
+              | select(.name == $package)
+              | .manifest_path
+            ')
+          echo "manifest_path=$MANIFEST_PATH" >> "$GITHUB_OUTPUT"
+      - name: Show package info
+        env:
+          MANIFEST_PATH: ${{ steps.pkg.outputs.manifest_path }}
+          PACKAGE_NAME: ${{ matrix.package }}
+        run: |
+          echo "Package: $PACKAGE_NAME"
+          echo "Manifest path: $MANIFEST_PATH"
+          cargo msrv show --manifest-path "$MANIFEST_PATH"
+      - name: Check MSRV
+        env:
+          MANIFEST_PATH: ${{ steps.pkg.outputs.manifest_path }}
+        run: |
+          cargo msrv verify --manifest-path "$MANIFEST_PATH"

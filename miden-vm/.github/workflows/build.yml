@@ -1,0 +1,33 @@
+# Runs build related jobs.
+
+name: build
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main, next]
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  no-std:
+    name: Build for no-std
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [stable, nightly]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Cleanup large tools for build space
+        uses: ./.github/actions/cleanup-runner
+      - name: Build for no-std
+        run: |
+          rustup update --no-self-update ${{ matrix.toolchain }}
+          rustup +${{ matrix.toolchain }} target add wasm32-unknown-unknown
+          rustup default ${{ matrix.toolchain }}
+          make build-no-std

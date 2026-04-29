@@ -1,0 +1,3 @@
+[package]
+name = "miden-core"
+version = "0.22.1"

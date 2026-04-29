@@ -30,7 +30,7 @@ jobs:
         run: |
           source $HOME/.cargo/env
           # Generate new wallet
-          OUTPUT=$(miden-client account new basic-wallet)
+          OUTPUT=$(miden-client new-wallet)
           echo "$OUTPUT"
           
           # Extract Account ID

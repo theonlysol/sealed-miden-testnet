@@ -23,14 +23,14 @@ jobs:
       - name: Initialize Miden Testnet Client
         run: |
           source $HOME/.cargo/env
-          miden-client init --rpc https://rpc.testnet.miden.io
+          miden-client init --network testnet
 
       - name: Generate Wallet
         id: wallet
         run: |
           source $HOME/.cargo/env
           # Generate new wallet
-          OUTPUT=$(miden-client new-wallet)
+          OUTPUT=$(miden-client account new basic-wallet)
           echo "$OUTPUT"
           
           # Extract Account ID

@@ -1,0 +1,23 @@
+name: Deploy Sealed Contract to Miden Testnet
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential libsqlite3-dev pkg-config
+
+      - name: Install Miden CLI
+        run: cargo install miden-client-cli --locked
+
+      - name: Initialize Miden Client
+        run: miden-client init --rpc https://rpc.testnet.miden.io
+
+      - name: Anchor Account
+        run: miden-client account new --account-type regular-immutable

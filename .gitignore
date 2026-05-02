@@ -7,3 +7,10 @@ node_modules/
 *.pdb
 *.exe
 *.dll
+wallet.mac
+*.mac
+*.json
+.env
+.env.local
+*.secret
+deployments/smoke-test-results.json

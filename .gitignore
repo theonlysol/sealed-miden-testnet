@@ -9,7 +9,9 @@ node_modules/
 *.dll
 wallet.mac
 *.mac
-*.json
+*wallet*.json
+*keystore*.json
+*backup*.json
 .env
 .env.local
 *.secret

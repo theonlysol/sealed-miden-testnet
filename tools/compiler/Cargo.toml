@@ -1,0 +1,15 @@
+[package]
+name = "compiler"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "compiler"
+path = "src/main.rs"
+
+[dependencies]
+miden-standards = { version = "0.14.5", default-features = false }
+miden-mast-package = { version = "0.22.2", default-features = false }
+anyhow = "1.0"
+
+

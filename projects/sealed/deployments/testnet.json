@@ -1,0 +1,10 @@
+{
+  "network": "testnet",
+  "rpc": "https://rpc.testnet.miden.io",
+  "account_id": "0x93e850a8cc056880583d262ab400d2",
+  "component_hash": "0x00390defab69561cf10b1c099cbb952db257b8afecfbbf32975a0f2249905419",
+  "account_hash": "0xb8d9fa93a7b2b45c178c8850a56f14eef4bb846451413320f1d4fd2d69525d4e",
+  "block_number": 300304,
+  "deployed_at": "2026-04-30T20:34:15Z",
+  "explorer_url": "https://explorer.miden.io/account/0x93e850a8cc056880583d262ab400d2"
+}

@@ -1,3 +1,16 @@
 [workspace]
-members = ["contracts/sealed-account", "sdk/sealed-sdk", "tests", "scripts/deployer"]
+members = [
+    "projects/sealed/contracts/sealed-account",
+    "projects/sealed/sdk/sealed-sdk",
+    "projects/sealed/tests",
+    "projects/sealed/scripts/deployer"
+]
+exclude = [
+    "miden-client",
+    "miden-vm",
+    "tools/compiler",
+    "tools/miden-protocol",
+    "tools/miden-standards",
+    "tools/activity-generator"
+]
 resolver = "2"

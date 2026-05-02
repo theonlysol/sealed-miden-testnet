@@ -1,0 +1,54 @@
+use miden::protocol::native_account
+use miden::protocol::tx
+use miden::core::crypto::hashes::poseidon2
+
+#! Creates the transaction summary and returns it in the order in which it will be hashed.
+#!
+#! Inputs:  [SALT]
+#! Outputs: [ACCOUNT_DELTA_COMMITMENT, INPUT_NOTES_COMMITMENT, OUTPUT_NOTES_COMMITMENT, SALT]
+#!
+#! Where:
+#! - SALT is a user-defined input recommended to use as replay protection.
+#! - OUTPUT_NOTES_COMMITMENT is the commitment to the transaction's output notes.
+#! - INPUT_NOTES_COMMITMENT is the commitment to the transaction's inputs notes.
+#! - ACCOUNT_DELTA_COMMITMENT is the commitment to the transaction's account delta.
+pub proc create_tx_summary
+    exec.tx::get_output_notes_commitment
+    # => [OUTPUT_NOTES_COMMITMENT, SALT]
+
+    exec.tx::get_input_notes_commitment
+    # => [INPUT_NOTES_COMMITMENT, OUTPUT_NOTES_COMMITMENT, SALT]
+
+    exec.native_account::compute_delta_commitment
+    # => [ACCOUNT_DELTA_COMMITMENT, INPUT_NOTES_COMMITMENT, OUTPUT_NOTES_COMMITMENT, SALT]
+end
+
+#! Hashes the provided transaction summary and returns its commitment.
+#!
+#! Inputs:  [ACCOUNT_DELTA_COMMITMENT, INPUT_NOTES_COMMITMENT, OUTPUT_NOTES_COMMITMENT, SALT]
+#! Outputs: [TX_SUMMARY_COMMITMENT]
+#!
+#! Where:
+#! - SALT is an arbitrary word used for replay protection.
+#! - OUTPUT_NOTES_COMMITMENT is the commitment to the transaction's output notes.
+#! - INPUT_NOTES_COMMITMENT is the commitment to the transaction's inputs notes.
+#! - ACCOUNT_DELTA_COMMITMENT is the commitment to the transaction's account delta.
+pub proc hash_tx_summary
+    # pad capacity element of the hasher
+    padw movdnw.2
+    # => [ACCOUNT_DELTA_COMMITMENT, INPUT_NOTES_COMMITMENT, CAPACITY, OUTPUT_NOTES_COMMITMENT, SALT]
+
+    exec.poseidon2::permute
+    # => [RATE0, RATE1, CAPACITY, OUTPUT_NOTES_COMMITMENT, SALT]
+
+    # drop rate words
+    dropw dropw
+    # => [CAPACITY, OUTPUT_NOTES_COMMITMENT, SALT]
+
+    movdnw.2
+    # => [OUTPUT_NOTES_COMMITMENT, SALT, CAPACITY]
+
+    exec.poseidon2::permute
+    exec.poseidon2::squeeze_digest
+    # => [TX_SUMMARY_COMMITMENT]
+end

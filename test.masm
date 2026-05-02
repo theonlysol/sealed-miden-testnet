@@ -1,0 +1,5 @@
+use miden::account
+
+begin
+    push.0
+end

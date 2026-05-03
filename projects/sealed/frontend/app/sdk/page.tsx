@@ -1,21 +1,24 @@
 export default function SDKPage() {
-  const codeSnippet = `import { midenWasm } from "@sealed/sdk";
+  const codeSnippet = `import { WebClient } from "@miden-sdk/miden-sdk";
+import { useWallet } from "@demox-labs/miden-wallet-adapter";
 
-// 1. Request user to prove their score meets your requirement
-const requiredThreshold = 500; // Gold Tier equivalent
-const proof = await requestUserProof(requiredThreshold);
+// 1. Request user to prove their reputation
+const { requestTransaction } = useWallet();
+const transaction = {
+  type: 'custom',
+  payload: {
+    recipientAddress: SEALED_CONTRACT_ID,
+    transactionRequest: proofRequest,
+  }
+};
+await requestTransaction(transaction);
 
-// 2. Verify the proof locally or via Miden RPC
-const verification = await midenWasm.verifyProof(proof, requiredThreshold);
+// 2. Verify on-chain results
+const client = new WebClient("https://rpc.testnet.miden.io:443");
+await client.initialize();
+const state = await client.syncState();
+console.log("Current block:", state.blockNumber);`;
 
-if (verification.valid) {
-  // Grant access! The user has proven their reputation 
-  // without revealing their underlying credentials.
-  grantAccess();
-} else {
-  // Reject
-  console.error(verification.message);
-}`;
 
   return (
     <div className="container mx-auto px-4 py-16 max-w-4xl">

@@ -1,6 +1,6 @@
 {
   "buildCommand": "npm run build",
-  "installCommand": "npm install",
+  "installCommand": "npm install --legacy-peer-deps",
   "framework": "nextjs",
   "env": {
     "NEXT_PUBLIC_MIDEN_RPC_URL": "https://rpc.testnet.miden.io"

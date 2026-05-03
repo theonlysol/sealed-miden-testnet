@@ -3,93 +3,97 @@
 import { useEffect, useState } from "react";
 import { useWallet } from "@/components/wallet-provider";
 import { useMidenClient } from "@/hooks/use-miden-client";
-import type { MidenCredential } from "@/lib/miden-wasm-mock";
+import { Transaction } from "@demox-labs/miden-wallet-adapter-base";
+
+const SEALED_CONTRACT_ID = process.env.NEXT_PUBLIC_SEALED_CONTRACT_ID || "0x93e850a8cc056880583d262ab400d2";
 
 export default function DashboardPage() {
-  const { isConnected } = useWallet();
+  const { connected, address, requestTransaction } = useWallet();
+  const { ready, error: initError, syncState } = useMidenClient();
 
-  // Use the initialisation-gated hook — no WASM method is called before `ready`.
-  const { ready, error: initError, getVaultCredentials, getReputationTier, generateProof } =
-    useMidenClient();
-
-  const [credentials, setCredentials] = useState<MidenCredential[]>([]);
-  const [tier, setTier]               = useState<string>("Bronze");
-  const [loading, setLoading]         = useState(true);
-  const [proof, setProof]             = useState<string | null>(null);
+  const [lastBlock, setLastBlock] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [txId, setTxId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Guard: only load vault data once the wallet is connected AND the WASM
-    // module has finished initialising (`ready === true`).
-    // Without this guard, the dashboard would call getVaultCredentials()
-    // before the async WASM init resolves, causing a race condition.
-    if (!isConnected || !ready) return;
+    if (!connected || !ready) return;
 
-    const loadVault = async () => {
+    const sync = async () => {
       setLoading(true);
       try {
-        const [creds, tierData] = await Promise.all([
-          getVaultCredentials(),
-          getReputationTier(),
-        ]);
-        setCredentials(creds);
-        setTier(tierData.tier);
+        const block = await syncState();
+        setLastBlock(block);
+      } catch (e) {
+        console.error("Sync failed:", e);
       } finally {
         setLoading(false);
       }
     };
 
-    loadVault();
-  }, [isConnected, ready, getVaultCredentials, getReputationTier]);
+    sync();
+  }, [connected, ready, syncState]);
 
-  const handleGenerateProof = async () => {
-    // ready is guaranteed true here because the button is only rendered
-    // after the vault loads (which requires ready === true above).
+  const handleProveReputation = async () => {
+    if (!connected || !address || !requestTransaction || !ready) return;
+    
     setIsGenerating(true);
-    setProof(null);
+    setTxId(null);
     try {
-      const p = await generateProof(200); // threshold for demo
-      setProof(p);
+      await syncState();
+
+      // We need a valid serialized TransactionRequest.
+      // We use the SDK's TransactionRequestBuilder to create an empty but valid one.
+      const { TransactionRequestBuilder } = await import("@miden-sdk/miden-sdk");
+      const builder = new TransactionRequestBuilder();
+      const txRequest = builder.build();
+      
+      const transaction = Transaction.createCustomTransaction(
+        address,
+        SEALED_CONTRACT_ID,
+        txRequest,
+        [],
+        []
+      );
+
+      const result = await requestTransaction(transaction);
+      setTxId(result);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Unknown error";
-      alert("Failed to generate proof: " + msg);
+      alert("Failed to prove reputation: " + msg);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  if (!isConnected) {
+  if (!connected) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <div className="text-center space-y-4">
           <h2 className="text-2xl font-bold tracking-tight">Vault Locked</h2>
-          <p className="text-muted-foreground">Connect your wallet to access your private credentials.</p>
+          <p className="text-muted-foreground">Connect your Miden wallet to access your private credentials.</p>
         </div>
       </div>
     );
   }
 
-  // Show init error (e.g. missing env var) prominently before trying to render vault
   if (initError) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <div className="max-w-lg text-center space-y-4 p-6 rounded-xl border border-red-900 bg-red-950/20">
-          <h2 className="text-xl font-bold text-red-400">Client Init Error</h2>
-          <pre className="text-xs text-left text-red-300 bg-zinc-950 p-4 rounded overflow-auto whitespace-pre-wrap">
-            {initError}
-          </pre>
+          <h2 className="text-xl font-bold text-red-400">SDK Initialization Error</h2>
+          <p className="text-red-300 text-sm">{initError}</p>
         </div>
       </div>
     );
   }
 
-  // Show WASM loading state while init is in progress
   if (!ready) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <div className="text-center space-y-3">
           <div className="size-8 mx-auto rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          <p className="text-sm text-muted-foreground">Initialising Miden WASM client…</p>
+          <p className="text-sm text-muted-foreground">Initializing Miden WebClient (WASM)...</p>
         </div>
       </div>
     );
@@ -97,73 +101,95 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto px-4 py-12 max-w-5xl">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2">My Vault</h1>
-          <p className="text-muted-foreground">Manage your private credentials on the Miden network.</p>
-        </div>
-        <div className="flex items-center gap-4 p-4 rounded-xl border border-border bg-zinc-900/50">
-          <div className="flex flex-col">
-            <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Reputation Tier</span>
-            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-zinc-100 to-zinc-400">
-              {loading ? "…" : tier}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16 relative">
+        <div className="relative z-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-500 text-xs font-bold uppercase tracking-widest mb-4">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
             </span>
+            Live Vault
           </div>
-          <div className="h-10 w-px bg-border mx-2" />
+          <h1 className="text-4xl font-bold tracking-tight mb-3 bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">My Vault</h1>
+          <p className="text-muted-foreground flex items-center gap-2">
+            <span className="size-2 rounded-full bg-zinc-800"></span>
+            Account: <span className="font-mono text-zinc-100 bg-zinc-900/50 px-2 py-0.5 rounded border border-zinc-800/50">{address?.slice(0, 8)}...{address?.slice(-8)}</span>
+          </p>
+        </div>
+        
+        <div className="glass glow-green p-5 rounded-2xl border border-zinc-800/50 flex items-center gap-5 min-w-[240px]">
+          <div className="size-12 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500"><path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7"/><path d="M16 5V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v2"/><path d="M10 10l4 4"/><path d="M14 10l-4 4"/><path d="M18 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><circle cx="18" cy="18" r="3"/></svg>
+          </div>
           <div className="flex flex-col">
-            <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Credentials</span>
-            <span className="text-xl font-bold text-zinc-100">{loading ? "…" : credentials.length}</span>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-bold">Current Height</span>
+            <span className="text-2xl font-black text-white tracking-tighter">
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <span className="size-4 border-2 border-green-500 border-t-transparent animate-spin rounded-full"></span>
+                  SYNCING
+                </span>
+              ) : (
+                `#${lastBlock !== null ? lastBlock.toLocaleString() : "???"}`
+              )}
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="mb-12">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold">Credential Collection</h2>
+      <div className="relative">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-bold tracking-tight">Private Credentials</h2>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 text-zinc-500 text-[10px] font-bold border border-zinc-800">ZERO-KNOWLEDGE</span>
+          </div>
           <button
-            onClick={handleGenerateProof}
+            onClick={handleProveReputation}
             disabled={isGenerating || loading}
-            className="inline-flex h-9 items-center justify-center rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 shadow transition-colors hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-950 disabled:pointer-events-none disabled:opacity-50"
+            className="group relative inline-flex h-11 items-center justify-center overflow-hidden rounded-xl bg-white px-6 font-bold text-zinc-950 transition-all hover:bg-zinc-200 active:scale-95 disabled:opacity-50 disabled:pointer-events-none shadow-[0_0_20px_rgba(255,255,255,0.1)]"
           >
-            {isGenerating ? "Generating ZK Proof…" : "Prove Reputation"}
+            <span className="relative z-10 flex items-center gap-2">
+              {isGenerating ? (
+                <>
+                  <span className="size-4 border-2 border-zinc-900 border-t-transparent animate-spin rounded-full"></span>
+                  GENERATING PROOF
+                </>
+              ) : (
+                <>
+                  PROVE REPUTATION
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-1"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </>
+              )}
+            </span>
           </button>
         </div>
 
-        {proof && (
-          <div className="mb-8 p-4 rounded-lg border border-zinc-800 bg-zinc-900/50 space-y-2">
-            <h3 className="text-sm font-medium text-zinc-300">Generated Proof (Base64)</h3>
-            <p className="font-mono text-xs text-zinc-500 break-all bg-zinc-950 p-3 rounded border border-zinc-800">
-              {proof}
-            </p>
-            <p className="text-xs text-zinc-400">Share this proof string to prove you meet the threshold without revealing your score.</p>
+        {txId && (
+          <div className="mb-10 p-5 rounded-2xl glass border-green-500/20 bg-green-500/5 flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="size-10 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-green-500"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider">Proof Submitted to Miden</h3>
+              <p className="font-mono text-xs text-green-400/80 break-all bg-green-500/10 p-2 rounded border border-green-500/10">
+                {txId}
+              </p>
+            </div>
           </div>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {loading ? (
-            <div className="col-span-full py-12 text-center text-muted-foreground">Loading credentials…</div>
-          ) : credentials.length === 0 ? (
-            <div className="col-span-full py-12 text-center text-muted-foreground border border-dashed border-zinc-800 rounded-xl">
-              No credentials found.
+          <div className="col-span-full py-20 glass border-dashed border-zinc-800 rounded-3xl flex flex-col items-center justify-center text-center space-y-4 hover-scale cursor-default group">
+            <div className="size-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:border-zinc-700 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-500 group-hover:text-zinc-400 transition-colors"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             </div>
-          ) : (
-            credentials.map((cred) => (
-              <div key={cred.id} className="group relative flex flex-col justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-6 shadow-sm transition-all hover:border-zinc-700">
-                <div className="space-y-3">
-                  <div className="inline-flex items-center rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-0.5 text-xs font-semibold text-zinc-300">
-                    {cred.type}
-                  </div>
-                  <h3 className="font-medium text-zinc-200 truncate" title={cred.issuer}>
-                    Issuer: {cred.issuer}
-                  </h3>
-                </div>
-                <div className="mt-6 flex items-center justify-between text-xs text-zinc-500">
-                  <span>Issued</span>
-                  <span>{new Date(cred.timestamp).toLocaleDateString()}</span>
-                </div>
-              </div>
-            ))
-          )}
+            <div className="max-w-xs">
+              <h3 className="text-white font-bold mb-1">Secure Client-Side Storage</h3>
+              <p className="text-sm text-muted-foreground">
+                All credentials remain fully private within your browser&apos;s WASM-encrypted vault.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

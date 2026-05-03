@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useWallet } from "./wallet-provider";
+import { WalletMultiButton } from "@demox-labs/miden-wallet-adapter-reactui";
 import { cn } from "@/lib/utils";
 
 export function Navbar() {
   const pathname = usePathname();
-  const { isConnected, address, connect, disconnect } = useWallet();
 
   const links = [
     { href: "/dashboard", label: "Dashboard" },
@@ -44,26 +43,7 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-4">
-          {isConnected ? (
-            <div className="flex items-center gap-4">
-              <span className="text-xs font-mono text-muted-foreground bg-secondary px-2 py-1 rounded">
-                {address?.slice(0, 6)}...{address?.slice(-4)}
-              </span>
-              <button
-                onClick={disconnect}
-                className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
-              >
-                Disconnect
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={connect}
-              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm"
-            >
-              Connect Wallet
-            </button>
-          )}
+          <WalletMultiButton />
         </div>
       </div>
     </nav>

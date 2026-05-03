@@ -1,41 +1,23 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
-
-interface WalletContextType {
-  isConnected: boolean;
-  address: string | null;
-  connect: () => void;
-  disconnect: () => void;
-}
-
-const WalletContext = createContext<WalletContextType | undefined>(undefined);
+import { ReactNode, useMemo } from "react";
+import { WalletProvider as MidenWalletProvider } from "@demox-labs/miden-wallet-adapter";
+import { WalletModalProvider } from "@demox-labs/miden-wallet-adapter-reactui";
+import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
+import "@demox-labs/miden-wallet-adapter-reactui/styles.css";
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const [isConnected, setIsConnected] = useState(false);
-  const [address, setAddress] = useState<string | null>(null);
-
-  const connect = () => {
-    setIsConnected(true);
-    setAddress("0xSealedMockUser1234");
-  };
-
-  const disconnect = () => {
-    setIsConnected(false);
-    setAddress(null);
-  };
+  const wallets = useMemo(() => [
+    new MidenWalletAdapter(),
+  ], []);
 
   return (
-    <WalletContext.Provider value={{ isConnected, address, connect, disconnect }}>
-      {children}
-    </WalletContext.Provider>
+    <MidenWalletProvider wallets={wallets} autoConnect>
+      <WalletModalProvider>
+        {children}
+      </WalletModalProvider>
+    </MidenWalletProvider>
   );
 }
 
-export function useWallet() {
-  const context = useContext(WalletContext);
-  if (context === undefined) {
-    throw new Error("useWallet must be used within a WalletProvider");
-  }
-  return context;
-}
+export { useWallet } from "@demox-labs/miden-wallet-adapter";

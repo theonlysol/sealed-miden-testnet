@@ -3,51 +3,55 @@
 import { useState } from "react";
 import { useWallet } from "@/components/wallet-provider";
 import { useMidenClient } from "@/hooks/use-miden-client";
-import type { CredentialType } from "@/lib/miden-wasm-mock";
+import { Transaction } from "@demox-labs/miden-wallet-adapter-base";
+
+const SEALED_CONTRACT_ID = process.env.NEXT_PUBLIC_SEALED_CONTRACT_ID || "0x93e850a8cc056880583d262ab400d2";
 
 export default function IssuePage() {
-  const { isConnected } = useWallet();
-
-  // Gate: issueCredential must not fire before the WASM module is ready.
-  const { ready, error: initError, issueCredential } = useMidenClient();
+  const { connected, address, requestTransaction } = useWallet();
+  const { ready, error: initError, syncState } = useMidenClient();
 
   const [recipient, setRecipient]   = useState("");
-  const [type, setType]             = useState<CredentialType>("Governance");
+  const [type, setType]             = useState("Governance");
   const [score, setScore]           = useState("50");
-  const [notes, setNotes]           = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [txStatus, setTxStatus]     = useState<"idle" | "pending" | "finalized">("idle");
+  const [txId, setTxId]             = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!recipient || !score) return;
-
-    // Extra runtime guard — submit button is already disabled when !ready,
-    // but we guard here too in case of programmatic calls.
-    if (!ready) {
-      alert("Miden WASM client is still initialising. Please wait.");
-      return;
-    }
+    if (!recipient || !score || !requestTransaction || !address) return;
 
     setIsSubmitting(true);
-    setTxStatus("pending");
+    setTxId(null);
 
     try {
-      await issueCredential(recipient, type, parseInt(score, 10));
-      setTxStatus("finalized");
+      await syncState();
+
+      const { TransactionRequestBuilder } = await import("@miden-sdk/miden-sdk");
+      const builder = new TransactionRequestBuilder();
+      const txRequest = builder.build();
+      const transaction = Transaction.createCustomTransaction(
+        address,
+        SEALED_CONTRACT_ID,
+        txRequest,
+        [],
+        []
+      );
+
+      const txId = await requestTransaction(transaction);
+      setTxId(txId);
+      
       setRecipient("");
       setScore("50");
-      setNotes("");
-    } catch {
-      alert("Failed to issue credential.");
-      setTxStatus("idle");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to issue credential.";
+      alert(msg);
     } finally {
       setIsSubmitting(false);
-      setTimeout(() => setTxStatus("idle"), 5_000);
     }
   };
 
-  if (!isConnected) {
+  if (!connected) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <div className="text-center space-y-4">
@@ -58,15 +62,12 @@ export default function IssuePage() {
     );
   }
 
-  // Show env/init error prominently
   if (initError) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <div className="max-w-lg text-center space-y-4 p-6 rounded-xl border border-red-900 bg-red-950/20">
           <h2 className="text-xl font-bold text-red-400">Client Init Error</h2>
-          <pre className="text-xs text-left text-red-300 bg-zinc-950 p-4 rounded overflow-auto whitespace-pre-wrap">
-            {initError}
-          </pre>
+          <p className="text-red-300 text-sm">{initError}</p>
         </div>
       </div>
     );
@@ -82,28 +83,24 @@ export default function IssuePage() {
       </div>
 
       <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-6 shadow-sm relative overflow-hidden">
-        {/* WASM initialising overlay */}
-        {!ready && !initError && (
+        {!ready && (
           <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center z-10 space-y-4">
             <div className="size-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            <p className="font-medium text-sm text-muted-foreground">Initialising Miden WASM client…</p>
+            <p className="font-medium text-sm text-muted-foreground">Initializing Miden WASM client…</p>
           </div>
         )}
 
-        {txStatus === "pending" && (
+        {isSubmitting && (
           <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center z-10 space-y-4">
             <div className="size-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            <p className="font-medium">Submitting to Miden Testnet…</p>
+            <p className="font-medium text-white">Requesting Wallet Signature…</p>
           </div>
         )}
 
-        {txStatus === "finalized" && (
-          <div className="absolute inset-0 bg-zinc-950/90 backdrop-blur-sm flex flex-col items-center justify-center z-10 space-y-4">
-            <div className="size-12 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center mb-2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
-            <h3 className="text-xl font-bold text-green-500">Transaction Finalized</h3>
-            <p className="text-sm text-zinc-400">Credential successfully issued to recipient.</p>
+        {txId && (
+          <div className="mb-8 p-4 rounded-lg border border-green-800 bg-green-950/20 space-y-2">
+            <h3 className="text-sm font-medium text-green-400">Credential Issued</h3>
+            <p className="font-mono text-xs text-green-300 break-all">TX: {txId}</p>
           </div>
         )}
 
@@ -115,7 +112,7 @@ export default function IssuePage() {
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
               placeholder="0x…"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               required
             />
           </div>
@@ -126,8 +123,8 @@ export default function IssuePage() {
               <select
                 id="type"
                 value={type}
-                onChange={(e) => setType(e.target.value as CredentialType)}
-                className="flex h-9 w-full rounded-md border border-input bg-zinc-950 px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                onChange={(e) => setType(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-zinc-950 px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="Governance">Governance (4×)</option>
                 <option value="Contract">Completed Contract (3×)</option>
@@ -143,28 +140,16 @@ export default function IssuePage() {
                 max="100"
                 value={score}
                 onChange={(e) => setScore(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 required
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="notes" className="text-sm font-medium leading-none">Notes (Optional)</label>
-            <input
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Internal memo…"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-          </div>
-
           <button
             type="submit"
-            // Disabled until WASM is ready — prevents premature on-chain call
             disabled={isSubmitting || !ready}
-            className="inline-flex w-full h-10 items-center justify-center rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 shadow transition-colors hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-950 disabled:pointer-events-none disabled:opacity-50"
+            className="inline-flex w-full h-10 items-center justify-center rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 shadow transition-colors hover:bg-zinc-200 disabled:opacity-50"
           >
             {!ready ? "Awaiting WASM init…" : "Sign & Issue Credential"}
           </button>

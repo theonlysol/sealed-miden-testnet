@@ -1,0 +1,105 @@
+export.register_institution
+    debug.stack
+
+    # Read schema hash and institution id from advice provider.
+    adv_pushw
+    adv_push
+
+    # Stack: [institution_id, schema_hash_word]
+    # Persist schema hash at slot 0.
+    push.0
+    movup.5
+    account::set_item
+
+    # Persist institution id at slot 1.
+    push.1
+    movup.4
+    padw
+    account::set_item
+
+    # Initialize model root (slot 2) to zero word.
+    push.2
+    push.0
+    push.0
+    push.0
+    push.0
+    account::set_item
+
+    # Initialize participant count (slot 3) to 0.
+    push.3
+    push.0
+    padw
+    account::set_item
+
+    debug.stack
+end
+
+export.submit_gradient_update
+    debug.stack
+
+    # Read gradient hash, validity proof hash, and institution id.
+    adv_pushw
+    adv_pushw
+    adv_push
+
+    # Stack: [institution_id, validity_proof_hash_word, gradient_hash_word]
+    # Verify institution id against slot 1.
+    push.1
+    account::get_item
+    assert_eq
+    dropw
+
+    # Clear validity proof hash from stack (hash is accepted as provided).
+    swapw.1
+    dropw
+
+    # Load current model root and hash with gradient hash to derive new root.
+    push.2
+    account::get_item
+    rpo_hash
+
+    # Store new model root in slot 2.
+    push.2
+    movup.4
+    account::set_item
+
+    # Increment participant count in slot 3.
+    push.3
+    account::get_item
+    drop
+    drop
+    drop
+    add.1
+    push.3
+    swap
+    padw
+    account::set_item
+
+    # Emit event with new model root.
+    push.0
+    push.0
+    push.0
+    push.0
+    push.0
+    emit
+
+    debug.stack
+end
+
+export.pull_model
+    debug.stack
+
+    # Read model root and participant count from storage.
+    push.2
+    account::get_item
+    push.3
+    account::get_item
+
+    # Keep only participant_count plus model_root_word on stack.
+    drop
+    drop
+    drop
+    movup.4
+
+    debug.stack
+end

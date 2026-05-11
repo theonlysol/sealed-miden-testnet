@@ -1,0 +1,8 @@
+[package]
+name = "syndex-sdk"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+miden-base = "0.12.0"
+miden-client = "0.12.0"

@@ -1,0 +1,11 @@
+[package]
+name = "syndex-tests"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "syndex-tests"
+path = "src/integration_test.rs"
+
+[dependencies]
+syndex-sdk = { path = "../sdk/syndex-sdk" }

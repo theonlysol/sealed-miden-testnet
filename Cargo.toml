@@ -3,7 +3,10 @@ members = [
     "projects/sealed/contracts/sealed-account",
     "projects/sealed/sdk/sealed-sdk",
     "projects/sealed/tests",
-    "projects/sealed/scripts/deployer"
+    "projects/sealed/scripts/deployer",
+    "projects/syndex/contracts/syndex-account",
+    "projects/syndex/sdk/syndex-sdk",
+    "projects/syndex/tests"
 ]
 exclude = [
     "miden-client",

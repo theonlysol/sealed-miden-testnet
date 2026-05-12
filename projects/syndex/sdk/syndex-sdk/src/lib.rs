@@ -56,6 +56,7 @@ impl SyndexClient {
             institution_id,
             schema_hash,
         });
+        self.model_state.last_updated = current_unix_timestamp();
         Ok(())
     }
 
@@ -83,8 +84,13 @@ impl SyndexClient {
 
         self.gradient_history.push(update);
 
+        let old_root = self.model_state.model_root;
         for (idx, value) in gradient_hash.iter().enumerate() {
             self.model_state.model_root[idx] ^= *value;
+        }
+
+        if self.model_state.model_root == old_root {
+            return Err("model root unchanged after update".to_string());
         }
 
         self.model_state.participant_count = self
@@ -103,13 +109,13 @@ impl SyndexClient {
     pub fn generate_advice_stack(&self) -> Vec<u64> {
         if let Some(last) = self.gradient_history.last() {
             let mut stack = Vec::with_capacity(9);
-            for value in last.validity_proof_hash.iter().rev() {
-                stack.push(*value);
-            }
-            for value in last.gradient_hash.iter().rev() {
-                stack.push(*value);
-            }
             stack.push(last.institution_id);
+            for value in last.gradient_hash.iter() {
+                stack.push(*value);
+            }
+            for value in last.validity_proof_hash.iter() {
+                stack.push(*value);
+            }
             stack
         } else if let Some(institution) = &self.institution {
             vec![institution.institution_id]
@@ -131,7 +137,14 @@ impl SyndexClient {
             .any(|value| *value != 0);
         let institution_match = update.institution_id == institution.institution_id;
 
-        gradient_non_zero && proof_non_zero && institution_match
+        // Security Audit Fixes:
+        // 1. Magnitude bound check: prevent poisoning with extremely large values.
+        let within_bounds = update.gradient_hash.iter().all(|value| *value < 1_000_000_000_000u64);
+        
+        // 2. Proof-gradient correlation check: a proof should not be identical to the data.
+        let proof_not_data = update.validity_proof_hash != update.gradient_hash;
+
+        gradient_non_zero && proof_non_zero && institution_match && within_bounds && proof_not_data
     }
 }
 

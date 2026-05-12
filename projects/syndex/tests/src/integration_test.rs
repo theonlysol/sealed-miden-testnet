@@ -75,21 +75,39 @@ fn test_gradient_validity_check_passes() {
 }
 
 #[test]
-fn test_gradient_validity_check_fails_zeros() {
+fn test_gradient_validity_check_fails_security() {
     let start = Instant::now();
     let mut client = SyndexClient::new(1);
     client.register_institution(5, [1, 1, 1, 1]).unwrap();
     
-    let update = GradientUpdate {
+    // Case 1: All zeros (already tested, but kept for completeness)
+    let update_zeros = GradientUpdate {
         institution_id: 5,
         gradient_hash: [0, 0, 0, 0],
         validity_proof_hash: [5, 6, 7, 8],
         timestamp: 1700000000,
     };
+    assert!(!client.verify_gradient_validity(&update_zeros));
+
+    // Case 2: One element exceeds bound (1_000_000_000_000)
+    let update_out_of_bounds = GradientUpdate {
+        institution_id: 5,
+        gradient_hash: [2_000_000_000_000, 2, 3, 4],
+        validity_proof_hash: [5, 6, 7, 8],
+        timestamp: 1700000000,
+    };
+    assert!(!client.verify_gradient_validity(&update_out_of_bounds));
+
+    // Case 3: Proof hash equals gradient hash
+    let update_correlated = GradientUpdate {
+        institution_id: 5,
+        gradient_hash: [1, 2, 3, 4],
+        validity_proof_hash: [1, 2, 3, 4],
+        timestamp: 1700000000,
+    };
+    assert!(!client.verify_gradient_validity(&update_correlated));
     
-    assert!(!client.verify_gradient_validity(&update));
-    
-    println!("test_gradient_validity_check_fails_zeros passed in {:?}", start.elapsed());
+    println!("test_gradient_validity_check_fails_security passed in {:?}", start.elapsed());
 }
 
 #[test]
@@ -131,9 +149,9 @@ fn test_full_institution_lifecycle() {
     
     client.register_institution(100, [9, 8, 7, 6]).unwrap();
     
-    client.submit_gradient_update([1, 1, 1, 1], [1, 1, 1, 1]).unwrap();
-    client.submit_gradient_update([2, 2, 2, 2], [2, 2, 2, 2]).unwrap();
-    client.submit_gradient_update([3, 3, 3, 3], [3, 3, 3, 3]).unwrap();
+    client.submit_gradient_update([1, 1, 1, 1], [10, 10, 10, 10]).unwrap();
+    client.submit_gradient_update([2, 2, 2, 2], [20, 20, 20, 20]).unwrap();
+    client.submit_gradient_update([3, 3, 3, 3], [30, 30, 30, 30]).unwrap();
     
     let model = client.pull_model();
     assert_eq!(model.participant_count, 3);
@@ -152,7 +170,7 @@ fn test_two_institutions_isolated() {
     client_a.register_institution(1, [1, 1, 1, 1]).unwrap();
     client_b.register_institution(2, [2, 2, 2, 2]).unwrap();
     
-    client_a.submit_gradient_update([10, 10, 10, 10], [10, 10, 10, 10]).unwrap();
+    client_a.submit_gradient_update([10, 10, 10, 10], [99, 99, 99, 99]).unwrap();
     
     assert_eq!(client_a.pull_model().participant_count, 1);
     assert_eq!(client_b.pull_model().participant_count, 0);

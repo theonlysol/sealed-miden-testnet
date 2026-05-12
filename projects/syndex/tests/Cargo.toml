@@ -3,9 +3,9 @@ name = "syndex-tests"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "syndex-tests"
-path = "src/integration_test.rs"
-
-[dependencies]
+[dev-dependencies]
 syndex-sdk = { path = "../sdk/syndex-sdk" }
+
+[[test]]
+name = "integration"
+path = "src/integration_test.rs"

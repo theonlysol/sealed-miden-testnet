@@ -1,12 +1,38 @@
-export.register_institution
+use miden::protocol::active_account
+use miden::protocol::native_account
+
+pub proc register_institution
     debug.stack
     # Stack: [] (depth 0)
 
     # Read schema hash and institution id from advice provider.
-    adv_pushw
+    adv_push.4
     # Stack: [SH3, SH2, SH1, SH0] (depth 4)
-    adv_push
+    adv_push.1
     # Stack: [ID, SH3, SH2, SH1, SH0] (depth 5)
+
+    # Get the calling account ID (for future direct linking)
+    # exec.account::get_id
+    # Stack: [account_id]
+
+    # Read provided institution_id from stack
+    # (already pushed from adv_push earlier)
+    # Stack: [institution_id, account_id]
+    # They won't be equal (account_id is 256-bit, 
+    # institution_id is derived 6-digit number)
+    # Instead: hash the account_id and take modulo
+    # to derive expected institution_id, then assert
+
+    # Assert institution_id > 0 and < 1000000
+    dup
+    push.0
+    gt
+    assert  # institution_id must be positive
+
+    dup
+    push.1000000
+    lt
+    assert  # institution_id must be < 1000000
 
     # Persist schema hash at slot 0.
     push.0
@@ -18,21 +44,21 @@ export.register_institution
     movup.3
     movup.3
     # Stack: [0, SH3, SH2, SH1, SH0, ID] (depth 6)
-    account::set_item
+    exec.native_account::set_item
     # Stack: [OLD_W3, OLD_W2, OLD_W1, OLD_W0, ID] (depth 5)
     dropw
     # Stack: [ID] (depth 1)
 
     # Persist institution id at slot 1.
     push.1
-    movup.1
+    swap
     # Stack: [ID, 1] (depth 2)
     swap
     padw
     # Stack: [0, 0, 0, ID, 1] (depth 5)
     movup.4
     # Stack: [1, 0, 0, 0, ID] (depth 5)
-    account::set_item
+    exec.native_account::set_item
     dropw
     # Stack: [] (depth 0)
 
@@ -44,7 +70,7 @@ export.register_institution
     push.0
     # Stack: [0, 0, 0, 0, 2] (depth 5)
     movup.4
-    account::set_item
+    exec.native_account::set_item
     dropw
 
     # Initialize participant count (slot 3) to 0.
@@ -53,28 +79,53 @@ export.register_institution
     padw
     # Stack: [0, 0, 0, 0, 3] (depth 5)
     movup.4
-    account::set_item
+    exec.native_account::set_item
     dropw
 
     debug.stack
     # Stack: [] (depth 0)
 end
 
-export.submit_gradient_update
+pub proc submit_gradient_update
     debug.stack
     # Stack: [] (depth 0)
 
+    # Read current nullifier count from slot 4
+    push.4
+    exec.active_account::get_item
+    # Stack: [0, 0, 0, nullifier_count] (depth 4)
+    drop
+    drop
+    drop
+    # Stack: [nullifier_count] (depth 1)
+
+    # Increment it
+    push.1
+    add
+    # Stack: [new_nullifier_count] (depth 1)
+
+    # Store back to slot 4
+    push.4
+    swap
+    padw
+    # Stack: [0, 0, 0, new_nullifier_count, 4] (depth 5)
+    movup.4
+    # Stack: [4, 0, 0, 0, new_nullifier_count] (depth 5)
+    exec.native_account::set_item
+    dropw
+    # Stack: [] (depth 0)
+
     # Read gradient hash, validity proof hash, and institution id.
-    adv_pushw
+    adv_push.4
     # Stack: [G3, G2, G1, G0] (depth 4)
-    adv_pushw
+    adv_push.4
     # Stack: [P3, P2, P1, P0, G3, G2, G1, G0] (depth 8)
-    adv_push
+    adv_push.1
     # Stack: [ID, P3, P2, P1, P0, G3, G2, G1, G0] (depth 9)
 
     # Verify institution id against slot 1.
     push.1
-    account::get_item
+    exec.active_account::get_item
     # Stack: [0, 0, 0, STORED_ID, ID, P3, P2, P1, P0, G3, G2, G1, G0] (depth 13)
     movup.4
     # Stack: [ID, 0, 0, 0, STORED_ID, P3, P2, P1, P0, G3, G2, G1, G0] (depth 13)
@@ -94,7 +145,7 @@ export.submit_gradient_update
 
     # Load current model root and XOR with gradient hash.
     push.2
-    account::get_item
+    exec.active_account::get_item
     # Stack: [R3, R2, R1, R0, G3, G2, G1, G0] (depth 8)
     
     # Simple XOR aggregation (placeholder for RPO hash fold)
@@ -119,12 +170,12 @@ export.submit_gradient_update
     movup.4
     movup.4
     movup.4
-    account::set_item
+    exec.native_account::set_item
     dropw
 
     # Increment participant count in slot 3.
     push.3
-    account::get_item
+    exec.active_account::get_item
     # Stack: [0, 0, 0, COUNT] (depth 4)
     drop
     drop
@@ -136,23 +187,23 @@ export.submit_gradient_update
     padw
     # Stack: [0, 0, 0, NEW_COUNT, 3] (depth 5)
     movup.4
-    account::set_item
+    exec.native_account::set_item
     dropw
 
     debug.stack
     # Stack: [] (depth 0)
 end
 
-export.pull_model
+pub proc pull_model
     debug.stack
     # Stack: [] (depth 0)
 
     # Read model root and participant count from storage.
     push.2
-    account::get_item
+    exec.active_account::get_item
     # Stack: [R3, R2, R1, R0] (depth 4)
     push.3
-    account::get_item
+    exec.active_account::get_item
     # Stack: [0, 0, 0, COUNT, R3, R2, R1, R0] (depth 8)
 
     # Clean stack: keep [COUNT, R3, R2, R1, R0]

@@ -7,9 +7,15 @@ import { MidenWalletAdapter } from "@demox-labs/miden-wallet-adapter-miden";
 import "@demox-labs/miden-wallet-adapter-reactui/styles.css";
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const wallets = useMemo(() => [
-    new MidenWalletAdapter(),
-  ], []);
+  const wallets = useMemo(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      return [new MidenWalletAdapter()];
+    } catch (e) {
+      console.error("Failed to initialize Miden Wallet Adapter:", e);
+      return [];
+    }
+  }, []);
 
   return (
     <MidenWalletProvider wallets={wallets} autoConnect>

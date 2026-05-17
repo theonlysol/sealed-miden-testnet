@@ -1,0 +1,10 @@
+{
+  "network": "testnet",
+  "rpc": "https://rpc.testnet.miden.io",
+  "account_id": "0x552c71210b324a80295db1b0850d9f",
+  "code_commitment": "0xfa445e6a58e16687ff78c247246280dfb4cf29a4211568e7e5baf65ceb7ee841",
+  "account_commitment": "0xac66d172713b391d2146133ab695d176e2d12a1a0722cf6b54a1e575a5ee0970",
+  "block_number": 654779,
+  "deployed_at": "2026-05-13T04:11:17Z",
+  "explorer_url": "https://explorer.miden.io/account/0x552c71210b324a80295db1b0850d9f"
+}

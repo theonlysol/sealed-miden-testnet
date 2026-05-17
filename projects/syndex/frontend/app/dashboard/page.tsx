@@ -1,36 +1,84 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@/components/wallet-provider";
 
-interface Submission {
-  desc: string;
-  gradientHash: string;
-  status: "pending" | "confirmed";
-}
-
 export default function DashboardPage() {
   const { connected, address } = useWallet();
   const [instId, setInstId] = useState<string | null>(null);
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [threats, setThreats] = useState<{ label: string; val: string }[]>([]);
+  const [schemaData, setSchemaData] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    setInstId(localStorage.getItem("syndex_institution_id"));
+    if (address) {
+      const regStr = localStorage.getItem(`syndex_registration_${address}`);
+      if (regStr) {
+        setInstId(JSON.parse(regStr).institutionId);
+      } else {
+        setInstId(null);
+      }
+    } else {
+      setInstId(null);
+    }
+    
+    
     const saved = localStorage.getItem("syndex_updates");
     if (saved) {
       try {
-        setSubmissions(JSON.parse(saved));
+        const history = JSON.parse(saved);
+        // Show all submissions
+        const allSubmissions = history.filter((h: any) => h.type === "SUBMIT");
+        setSubmissions(allSubmissions);
+        
+        // Group updates by schema type and count them
+        const schemaCounts: Record<string, number> = {
+          'Transaction Fraud': 0,
+          'Account Takeover': 0,
+          'Synthetic Identity': 0,
+          'Money Laundering': 0
+        };
+
+        allSubmissions.forEach((u: any) => {
+          let schemaName = u.schema || u.desc || 'Transaction Fraud';
+          if (schemaName.includes('_')) {
+            schemaName = schemaName.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          }
+          // Sometimes u.desc contains the friendly name, check if it matches keys
+          const matchedKey = Object.keys(schemaCounts).find(k => k.toLowerCase() === schemaName.toLowerCase());
+          if (matchedKey) {
+            schemaCounts[matchedKey]++;
+          } else {
+            schemaCounts['Transaction Fraud']++;
+          }
+        });
+        
+        setSchemaData(schemaCounts);
+
+        // Derive threats based on real counts
+        const derivedThreats: {label: string, val: string}[] = [];
+        Object.entries(schemaCounts).forEach(([label, count]) => {
+          if (count > 0) {
+            derivedThreats.push({
+              label,
+              val: count >= 4 ? 'HIGH' : count >= 2 ? 'MEDIUM' : 'LOW'
+            });
+          }
+        });
+        setThreats(derivedThreats);
+
       } catch (e) {
         console.error(e);
       }
     }
-  }, []);
+  }, [address]);
 
   if (!connected) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-6 text-center page-transition">
-        <div className="syndex-card p-12 max-w-md">
+      <div className="flex flex-col items-center justify-center py-12 px-6 text-center page-transition">
+        <div className="syndex-card p-4 md:p-6 max-w-md">
           <h2 className="text-2xl font-bold text-[#e2e8f0] mb-4">ACCESS RESTRICTED</h2>
           <p className="text-[#64748b] mb-8">Please connect your authorized Miden wallet to view the institution dashboard.</p>
         </div>
@@ -39,25 +87,25 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 md:p-12 min-h-[calc(100vh-4rem)] page-transition">
-      <div className="mb-12 border-b border-[#1a1a2e] pb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 animate-in-view">
+    <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-10 page-transition">
+      <div className="mb-6 md:mb-8 border-b border-[#1a1a2e] pb-4 md:pb-6 flex flex-col md:flex-row md:items-end justify-between gap-6 animate-in-view">
         <div>
-          <div className="text-[#3b82f6] text-xs font-bold uppercase tracking-widest mb-2">Institutional Overview</div>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-[#e2e8f0]">Dashboard</h1>
+          <div className="text-[#3b82f6] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-1 md:mb-2">Institutional Overview</div>
+          <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-[#e2e8f0]">Dashboard</h1>
         </div>
-        <div className="flex gap-4">
-          <Link href="/submit" className="syndex-btn-primary px-6 py-3 font-bold uppercase tracking-widest text-xs">
+        <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+          <Link href="/submit" className="syndex-btn-primary px-4 md:px-6 py-3 font-bold uppercase tracking-widest text-[10px] md:text-xs text-center w-full sm:w-auto">
             SUBMIT UPDATE
           </Link>
-          <Link href="/network" className="syndex-btn px-6 py-3 font-bold uppercase tracking-widest text-xs">
+          <Link href="/network" className="syndex-btn px-4 md:px-6 py-3 font-bold uppercase tracking-widest text-[10px] md:text-xs text-center w-full sm:w-auto">
             NETWORK STATE
           </Link>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {/* Institution Info */}
-        <div className="syndex-card p-8 animate-in-view" style={{ animationDelay: '0.1s' }}>
+        <div className="syndex-card p-4 md:p-6 animate-in-view" style={{ animationDelay: '0.1s' }}>
           <h3 className="text-[#64748b] font-bold tracking-widest uppercase text-xs mb-6">Institution Identity</h3>
           <div className="space-y-6">
             <div>
@@ -84,7 +132,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Activity Summary */}
-        <div className="lg:col-span-2 syndex-card p-8 animate-in-view" style={{ animationDelay: '0.2s' }}>
+        <div className="syndex-card p-4 md:p-6 animate-in-view" style={{ animationDelay: '0.2s' }}>
           <h3 className="text-[#64748b] font-bold tracking-widest uppercase text-xs mb-6 flex justify-between">
             <span>Intelligence Contributions</span>
             <span className="text-[#e2e8f0]">{submissions.length} UPDATES</span>
@@ -108,7 +156,7 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="text-[#94a3b8]">
-                  {submissions.map((sub, i) => (
+                  {[...submissions].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).map((sub, i) => (
                     <tr key={i} className="border-b border-[#1a1a2e]/50">
                       <td className="py-4 text-[#e2e8f0] font-bold">{sub.desc}</td>
                       <td className="py-4 truncate max-w-[200px]">{sub.gradientHash}</td>
@@ -125,33 +173,47 @@ export default function DashboardPage() {
       </div>
 
       {/* Intelligence Insights (Mock) */}
-      <div className="syndex-card p-8 animate-in-view" style={{ animationDelay: '0.3s' }}>
-        <h3 className="text-[#e2e8f0] font-bold tracking-widest uppercase text-sm mb-8 border-b border-[#1a1a2e] pb-4">
+      <div className="syndex-card p-4 md:p-6 animate-in-view" style={{ animationDelay: '0.3s' }}>
+        <h3 className="text-[#e2e8f0] font-bold tracking-widest uppercase text-sm mb-6 md:mb-8 border-b border-[#1a1a2e] pb-4">
           Network Intelligence Insights
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="space-y-4">
             <span className="text-xs text-[#64748b] font-bold uppercase tracking-widest">Model Precision (Aggregated)</span>
-            <div className="h-40 flex items-end gap-2">
-              {[40, 65, 55, 80, 70, 92].map((h, i) => (
-                <div key={i} className="flex-1 bg-[#3b82f6]/20 border-t-2 border-[#3b82f6] relative group" style={{ height: `${h}%` }}>
-                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#0a0a12] border border-[#1a1a2e] px-2 py-1 text-[10px] text-[#e2e8f0] opacity-0 group-hover:opacity-100 transition-opacity">
-                    {h}%
-                  </div>
+            {submissions.length === 0 || Object.values(schemaData).every(v => v === 0) ? (
+              <div className="h-40 flex items-center justify-center border border-[#1a1a2e] bg-[#050508] p-4 text-center">
+                <p className="text-[10px] text-[#64748b]">Submit your first gradient update to see model precision data</p>
+              </div>
+            ) : (
+              <>
+                <div className="h-40 flex items-end gap-2">
+                  {Object.entries(schemaData).map(([label, count], i) => {
+                    const maxCount = Math.max(...Object.values(schemaData));
+                    const height = maxCount > 0 ? (count / maxCount) * 100 : 0;
+                    const abbr = label.split(' ').map(w => w[0]).join('');
+                    return (
+                      <div key={i} className="flex-1 bg-[#3b82f6]/20 border-t-2 border-[#3b82f6] relative group flex items-end justify-center pb-2 transition-all duration-500" style={{ height: `${height}%` }}>
+                        <span className="text-[10px] font-bold text-[#e2e8f0] opacity-50">{abbr}</span>
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#0a0a12] border border-[#1a1a2e] px-2 py-1 text-[10px] text-[#e2e8f0] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                          {label}: {count}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-            <p className="text-[10px] text-[#64748b]">Real-time detection accuracy across participant network.</p>
+                <p className="text-[10px] text-[#64748b]">Real-time detection accuracy across participant network.</p>
+              </>
+            )}
           </div>
 
           <div className="space-y-4">
             <span className="text-xs text-[#64748b] font-bold uppercase tracking-widest">Threat Velocity</span>
             <div className="flex flex-col gap-3">
-              {[
-                { label: "Account Takeover", val: "LOW" },
-                { label: "Synthetic ID", val: "HIGH" },
-                { label: "Card Not Present", val: "MEDIUM" }
-              ].map((item, i) => (
+              {threats.length === 0 ? (
+                <div className="p-3 bg-[#050508] border border-[#1a1a2e] text-center">
+                  <span className="text-[#64748b] text-[10px] italic">No threat data yet. Submit pattern updates to populate threat intelligence.</span>
+                </div>
+              ) : threats.map((item, i) => (
                 <div key={i} className="flex justify-between items-center p-3 bg-[#050508] border border-[#1a1a2e]">
                   <span className="text-[#e2e8f0] text-xs font-mono">{item.label}</span>
                   <span className={`text-[10px] font-bold font-mono ${item.val === 'HIGH' ? 'text-[#ef4444]' : item.val === 'MEDIUM' ? 'text-[#f59e0b]' : 'text-[#22c55e]'}`}>
